@@ -528,89 +528,93 @@ async function KV(request, env, txt = 'ADD.txt') {
         :root {
             --primary-color: #2563eb;
             --success-color: #059669;
-            --bg-color: #f8fafc;
+            --bg-color: #f1f5f9;
             --card-bg: #ffffff;
             --text-main: #1e293b;
             --text-muted: #64748b;
-            --border-color: #e2e8f0;
+            --border-color: #cbd5e1;
         }
 
         body {
             margin: 0;
-            padding: 20px;
+            padding: 10px; /* 移动端留出微小间距 */
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-main);
             line-height: 1.6;
         }
 
+        /* 核心修改：让容器撑满全宽 */
         .main-container {
-            max-width: 900px;
+            width: 100%;
+            max-width: 98%; /* 接近 100%，左右留极窄边距 */
             margin: 0 auto;
         }
 
         .card {
             background: var(--card-bg);
             border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            padding: 24px;
-            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
             border: 1px solid var(--border-color);
+            box-sizing: border-box;
+            width: 100%;
         }
 
-        h2 { margin-top: 0; font-size: 1.25rem; color: var(--primary-color); border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }
+        h2 { margin-top: 0; font-size: 1.2rem; color: var(--primary-color); display: flex; align-items: center; gap: 8px; }
 
-        /* 链接列表样式 */
+        /* 链接列表全宽优化 */
         .link-item {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 10px;
-            border-bottom: 1px solid var(--border-color);
-            transition: background 0.2s;
+            padding: 12px 8px;
+            border-bottom: 1px solid #f1f5f9;
+            gap: 15px;
         }
-        .link-item:hover { background: #f1f5f9; }
-        .link-label { font-weight: 600; min-width: 120px; }
+        .link-item:last-child { border-bottom: none; }
+        .link-label { font-weight: 600; width: 80px; flex-shrink: 0; }
         .link-url { 
             color: var(--primary-color); 
             text-decoration: none; 
             word-break: break-all;
             flex-grow: 1;
-            margin: 0 15px;
-            font-family: monospace;
+            font-family: "SFMono-Regular", Consolas, monospace;
+            font-size: 13px;
+            background: #f8fafc;
+            padding: 4px 8px;
+            border-radius: 4px;
         }
 
-        /* 编辑器增强 */
-        .editor-wrapper { position: relative; transition: all 0.3s ease; }
+        /* 编辑器全宽优化 */
+        .editor-wrapper { width: 100%; }
         
         .editor {
             width: 100%;
-            height: 200px; /* 初始高度 */
+            height: 65vh; /* 核心修改：默认占据屏幕高度的 65% */
+            min-height: 400px;
             padding: 15px;
             border: 2px solid var(--border-color);
             border-radius: 8px;
-            font-family: "Fira Code", monospace;
+            font-family: "Fira Code", "Cascadia Code", monospace;
             font-size: 14px;
-            resize: vertical;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            line-height: 1.6;
+            resize: vertical; /* 允许手动拉长 */
+            transition: all 0.2s ease;
             outline: none;
             box-sizing: border-box;
+            display: block;
+            background-color: #fafafa;
         }
 
-        /* 焦点状态高度扩大 */
         .editor:focus {
-            height: 500px; 
+            background-color: #fff;
             border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
         }
 
-        .editor.fullscreen {
-            position: fixed;
-            top: 20px; left: 20px; right: 20px; bottom: 20px;
-            height: calc(100vh - 40px) !important;
-            z-index: 9999;
-        }
-
+        /* 底部按钮区域 */
         .btn-group {
             display: flex;
             align-items: center;
@@ -619,16 +623,18 @@ async function KV(request, env, txt = 'ADD.txt') {
         }
 
         .btn {
-            padding: 8px 20px;
+            padding: 10px 24px;
             border-radius: 6px;
             border: none;
             cursor: pointer;
-            font-weight: 500;
-            transition: opacity 0.2s;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s;
         }
         .btn-save { background: var(--success-color); color: white; }
-        .btn-full { background: var(--primary-color); color: white; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-save:hover { background: #047857; }
+        .btn-copy { background: #e2e8f0; color: #475569; }
+        .btn-copy:hover { background: #cbd5e1; }
 
         #qrcode-modal {
             display: none;
@@ -636,9 +642,9 @@ async function KV(request, env, txt = 'ADD.txt') {
             top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2);
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
             z-index: 10000;
             text-align: center;
         }
@@ -646,11 +652,19 @@ async function KV(request, env, txt = 'ADD.txt') {
             display: none;
             position: fixed;
             top:0; left:0; width:100%; height:100%;
-            background: rgba(0,0,0,0.5);
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
             z-index: 9999;
         }
 
-        .footer-info { font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 20px; }
+        .footer-info { font-size: 12px; color: var(--text-muted); text-align: center; margin: 20px 0; }
+        
+        /* 移动端适配 */
+        @media (max-width: 600px) {
+            .link-item { flex-direction: column; align-items: flex-start; gap: 5px; }
+            .btn-copy { align-self: flex-end; padding: 4px 12px; }
+            .editor { height: 50vh; }
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
 </head>
@@ -666,7 +680,7 @@ async function KV(request, env, txt = 'ADD.txt') {
                     <div class="link-item">
                         <span class="link-label">${labels[index]}</span>
                         <a href="javascript:void(0)" class="link-url" onclick="showQR('${fullUrl}')">${fullUrl}</a>
-                        <button class="btn" style="background:#e2e8f0" onclick="copyOnly('${fullUrl}')">复制</button>
+                        <button class="btn btn-copy" onclick="copyOnly('${fullUrl}')">复制</button>
                     </div>`;
                 }).join('')}
             </div>
@@ -676,34 +690,35 @@ async function KV(request, env, txt = 'ADD.txt') {
             <h2>📝 汇聚订阅编辑</h2>
             <div class="editor-wrapper">
                 ${hasKV ? `
-                <textarea class="editor" id="content" placeholder="输入订阅链接，每行一个...">${content}</textarea>
+                <textarea class="editor" id="content" placeholder="在此粘贴你的节点链接，每行一个...">${content}</textarea>
                 <div class="btn-group">
                     <button class="btn btn-save" id="saveBtn" onclick="saveContent(this)">保存配置</button>
-                    <button class="btn btn-full" onclick="toggleFull()">全屏模式</button>
-                    <span id="saveStatus" style="font-size: 13px;"></span>
+                    <span id="saveStatus" style="font-size: 13px; font-weight: 500;"></span>
                 </div>
-                ` : '<p style="color:red">⚠️ 请先绑定 KV 命名空间</p>'}
+                ` : '<p style="color:#ef4444; font-weight:bold;">⚠️ 错误：未绑定 KV 命名空间，无法保存数据。</p>'}
             </div>
         </div>
 
         <div class="footer-info">
             UA: ${request.headers.get('User-Agent')}<br>
-            Powered by CF-Workers-SUB & Gemini Optimized
+            © 2026 CF-Workers-SUB Professional Edition
         </div>
     </div>
 
     <div class="overlay" id="overlay" onclick="closeQR()"></div>
     <div id="qrcode-modal">
         <div id="qrcode"></div>
-        <p style="margin-top:10px; font-size:12px; color:#666">扫码订阅或点击空白处关闭</p>
+        <p style="margin-top:15px; font-weight:500; color:var(--text-main)">订阅二维码</p>
+        <p style="font-size:12px; color:var(--text-muted)">已自动复制链接，扫码即可导入</p>
     </div>
 
     <script>
         function copyOnly(text) {
             navigator.clipboard.writeText(text).then(() => {
                 const status = document.getElementById('saveStatus');
-                status.textContent = '✅ 已复制链接';
-                setTimeout(() => status.textContent = '', 2000);
+                status.textContent = '✅ 已成功复制到剪贴板';
+                status.style.color = 'var(--success-color)';
+                setTimeout(() => status.textContent = '', 3000);
             });
         }
 
@@ -711,7 +726,14 @@ async function KV(request, env, txt = 'ADD.txt') {
             copyOnly(text);
             const qrDiv = document.getElementById('qrcode');
             qrDiv.innerHTML = '';
-            new QRCode(qrDiv, { text: text, width: 200, height: 200 });
+            new QRCode(qrDiv, { 
+                text: text, 
+                width: 220, 
+                height: 220,
+                colorDark : "#0f172a",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
             document.getElementById('overlay').style.display = 'block';
             document.getElementById('qrcode-modal').style.display = 'block';
         }
@@ -721,18 +743,18 @@ async function KV(request, env, txt = 'ADD.txt') {
             document.getElementById('qrcode-modal').style.display = 'none';
         }
 
-        function toggleFull() {
-            document.getElementById('content').classList.toggle('fullscreen');
-        }
-
-        // 自动保存逻辑与原逻辑保持一致，但增加了UI反馈
         async function saveContent(button) {
             const textarea = document.getElementById('content');
             const status = document.getElementById('saveStatus');
-            const originalText = button.textContent;
+            const originalBtnText = button.textContent;
+
+            // 基础校验
+            if (!textarea.value.trim()) {
+                if (!confirm('确定要清空所有订阅内容吗？')) return;
+            }
 
             button.disabled = true;
-            button.textContent = '⌛ 保存中...';
+            button.textContent = '⌛ 正在同步至 KV...';
             
             try {
                 const response = await fetch(window.location.href, {
@@ -743,27 +765,32 @@ async function KV(request, env, txt = 'ADD.txt') {
 
                 if (response.ok) {
                     const now = new Date().toLocaleTimeString();
-                    status.textContent = '✅ 保存成功 ' + now;
+                    status.textContent = '🚀 配置已更新 ' + now;
                     status.style.color = 'var(--success-color)';
+                    textarea.style.borderColor = 'var(--success-color)';
+                    setTimeout(() => textarea.style.borderColor = '', 2000);
                 } else {
-                    throw new Error('服务器响应错误');
+                    throw new Error('Cloudflare 接口异常');
                 }
             } catch (e) {
-                status.textContent = '❌ 失败: ' + e.message;
-                status.style.color = 'red';
+                status.textContent = '❌ 保存失败: ' + e.message;
+                status.style.color = '#ef4444';
             } finally {
                 button.disabled = false;
-                button.textContent = originalText;
+                button.textContent = originalBtnText;
             }
         }
 
-        // 输入监听
-        let timer;
-        const textarea = document.getElementById('content');
-        if(textarea) {
-            textarea.addEventListener('input', () => {
-                clearTimeout(timer);
-                timer = setTimeout(() => saveContent(document.getElementById('saveBtn')), 5000);
+        // 自动保存防抖逻辑
+        let timeout;
+        const editor = document.getElementById('content');
+        if(editor) {
+            editor.addEventListener('input', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    const btn = document.getElementById('saveBtn');
+                    if(btn) saveContent(btn);
+                }, 10000); // 停止输入10秒后自动保存
             });
         }
     </script>
