@@ -679,15 +679,17 @@ async function KV(request, env, txt = 'ADD.txt') {
         <div class="card">
             <div class="editor-title-row">
                 <h2>📝 ${FileName} 汇聚订阅编辑</h2>
-                ${hasKV ? `
-                <div class="btn-group">
-                    <button class="btn btn-save" onclick="saveContent(this)">保存配置</button>
-                    <span class="save-status" style="font-size: 13px; color: #666;"></span>
-                </div>
-                ` : ''}
             </div>
             ${hasKV ? `
+            <div class="btn-group">
+                <button class="btn btn-save" onclick="saveContent(this)">保存配置</button>
+                <span class="save-status" style="font-size: 13px; color: #666;"></span>
+            </div>
             <textarea class="editor" id="content" placeholder="每行输入一个订阅链接">${content}</textarea>
+            <div class="btn-group">
+                <button class="btn btn-save" onclick="saveContent(this)">保存配置</button>
+                <span class="save-status" style="font-size: 13px; color: #666;"></span>
+            </div>
             ` : '<p style="color:red">请绑定 KV 命名空间</p>'}
         </div>
     </div>
