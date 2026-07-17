@@ -538,7 +538,7 @@ async function KV(request, env, txt = 'ADD.txt') {
             margin: 0;
             padding: 15px;
             font-family: sans-serif; /* 恢复原始系统默认字体 */
-            background-color: var(--bg-color);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) fixed;
             color: var(--text-main);
             box-sizing: border-box;
         }
@@ -565,7 +565,18 @@ async function KV(request, env, txt = 'ADD.txt') {
             box-sizing: border-box;
         }
 
-        h2 { margin-top: 0; font-size: 1.1rem; color: #444; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+        h2 { margin-top: 0; font-size: 1.1rem; color: #444; padding-bottom: 8px; }
+
+        .editor-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 4px;
+        }
+        .editor-title-row h2 { border-bottom: none; margin-bottom: 0; }
 
         /* 链接项样式 */
         .link-item {
@@ -651,8 +662,8 @@ async function KV(request, env, txt = 'ADD.txt') {
     <div class="info-container">
         <div class="card">
             <h2>🔗 订阅链接管理</h2>
-            ${['', '?b64', '?clash', '?sb', '?surge', '?loon'].map((type, index) => {
-                const labels = ['自适应', 'Base64', 'Clash', 'Sing-box', 'Surge', 'Loon'];
+            ${['', '?b64', '?clash', '?sb', '?surge', '?quanx', '?loon'].map((type, index) => {
+                const labels = ['自适应', 'Base64', 'Clash', 'Sing-box', 'Surge', 'Quantumult X', 'Loon'];
                 const fullUrl = `https://${url.hostname}/${mytoken}${type}`;
                 return `
                 <div class="link-item">
@@ -666,13 +677,17 @@ async function KV(request, env, txt = 'ADD.txt') {
 
     <div class="editor-container">
         <div class="card">
-            <h2>📝 ${FileName} 汇聚订阅编辑</h2>
+            <div class="editor-title-row">
+                <h2>📝 ${FileName} 汇聚订阅编辑</h2>
+                ${hasKV ? `
+                <div class="btn-group">
+                    <button class="btn btn-save" onclick="saveContent(this)">保存配置</button>
+                    <span class="save-status" style="font-size: 13px; color: #666;"></span>
+                </div>
+                ` : ''}
+            </div>
             ${hasKV ? `
             <textarea class="editor" id="content" placeholder="每行输入一个订阅链接">${content}</textarea>
-            <div class="btn-group">
-                <button class="btn btn-save" id="saveBtn" onclick="saveContent(this)">保存配置</button>
-                <span id="saveStatus" style="font-size: 13px; color: #666;"></span>
-            </div>
             ` : '<p style="color:red">请绑定 KV 命名空间</p>'}
         </div>
     </div>
@@ -712,10 +727,11 @@ async function KV(request, env, txt = 'ADD.txt') {
 
         async function saveContent(button) {
             const textarea = document.getElementById('content');
-            const status = document.getElementById('saveStatus');
+            const statuses = document.querySelectorAll('.save-status');
             button.disabled = true;
+            const originalText = button.textContent;
             button.textContent = '保存中...';
-            
+
             try {
                 const response = await fetch(window.location.href, {
                     method: 'POST',
@@ -725,15 +741,15 @@ async function KV(request, env, txt = 'ADD.txt') {
 
                 if (response.ok) {
                     const now = new Date().toLocaleTimeString();
-                    status.textContent = '保存成功 ' + now;
+                    statuses.forEach(s => s.textContent = '保存成功 ' + now);
                 } else {
-                    status.textContent = '保存失败';
+                    statuses.forEach(s => s.textContent = '保存失败');
                 }
             } catch (e) {
-                status.textContent = '错误: ' + e.message;
+                statuses.forEach(s => s.textContent = '错误: ' + e.message);
             } finally {
                 button.disabled = false;
-                button.textContent = '保存配置';
+                button.textContent = originalText;
             }
         }
 
@@ -742,7 +758,7 @@ async function KV(request, env, txt = 'ADD.txt') {
         if(editor) {
             editor.addEventListener('input', () => {
                 clearTimeout(timer);
-                timer = setTimeout(() => saveContent(document.getElementById('saveBtn')), 10000);
+                timer = setTimeout(() => saveContent(document.querySelector('.btn-save')), 10000);
             });
         }
     </script>
