@@ -306,6 +306,19 @@ async function MD5MD5(text) {
 }
 
 function clashFix(content) {
+	// 修复 fingerprint 字段：subConverter 有时会把未解码的 pinSHA256（含 %3A）
+	// 或者本应写入 client-fingerprint 的 uTLS 指纹（chrome/random 等，常见于 anytls+reality 节点）
+	// 错误地写进了要求纯十六进制的 fingerprint 字段，导致 Clash 解析报 encoding/hex 错误。
+	content = content.replace(/(?<!client-)fingerprint: ([^,}]+)/g, (match, val) => {
+		if (val.includes('%3A')) {
+			return 'fingerprint: ' + val.replace(/%3A/gi, ':');
+		}
+		if (/^(chrome|firefox|safari|ios|android|edge|360|qq|random|randomized)$/i.test(val.trim())) {
+			return 'client-fingerprint: ' + val;
+		}
+		return match;
+	});
+
 	if (content.includes('wireguard') && !content.includes('remote-dns-resolve')) {
 		let lines;
 		if (content.includes('\r\n')) {
