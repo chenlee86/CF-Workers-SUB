@@ -95,7 +95,7 @@ export default {
 			await sendMessage(`#获取订阅 ${FileName}`, request.headers.get('CF-Connecting-IP'), `UA: ${userAgentHeader}</tg-spoiler>\n域名: ${url.hostname}\n<tg-spoiler>入口: ${url.pathname + url.search}</tg-spoiler>`);
 
 			let 订阅格式 = 'base64';
-			if (userAgent.includes('null') || userAgent.includes('subconverter') || userAgent.includes('nekobox') || userAgent.includes(('CF-Workers-SUB').toLowerCase())) {
+			if (url.searchParams.has('shadowrocket') || userAgent.includes('null') || userAgent.includes('subconverter') || userAgent.includes('nekobox') || userAgent.includes(('CF-Workers-SUB').toLowerCase())) {
 				订阅格式 = 'base64';
 			} else if (userAgent.includes('clash') || (url.searchParams.has('clash') && !userAgent.includes('subconverter'))) {
 				订阅格式 = 'clash';
@@ -499,6 +499,146 @@ async function 迁移地址列表(env, txt = 'ADD.txt') {
 	return false;
 }
 
+function initArgoPanel() {
+    const editor = document.getElementById('content');
+    const panel = document.getElementById('argo-panel');
+    if (!editor || !panel) return;
+    const list = document.getElementById('argo-groups');
+    const status = document.getElementById('argo-status');
+    const regions = [
+        ['日韩', /日韩|日本|韩国|东京|大阪|首尔|春川|🇯🇵|🇰🇷/],
+        ['港台', /港台|香港|台湾|台灣|🇭🇰|🇹🇼/],
+        ['东南亚', /东南亚|新加坡|马来西亚|澳洲|澳大利亚|印度|迪拜|雅加达|泰国|越南|菲律宾|印尼|印度尼西亚|🇸🇬|🇲🇾|🇦🇺|🇮🇳|🇦🇪|🇹🇭|🇻🇳|🇵🇭|🇮🇩/],
+        ['欧洲', /欧洲|德国|法国|荷兰|意大利|西班牙|瑞士|瑞典|芬兰|法兰克福|都柏林|都林|马赛|🇪🇺|🇩🇪|🇫🇷|🇳🇱|🇮🇹|🇪🇸|🇨🇭|🇸🇪/],
+        ['美国', /美国|美國|圣何塞|俄勒冈|阿什本|芝加哥|凤凰城|纽约|盐湖城|🇺🇸/],
+        ['英国', /英国|英國|🇬🇧/]
+    ];
+    let source, rows;
+
+    function refresh(pending = {}) {
+        source = editor.value;
+        rows = [];
+        list.replaceChildren();
+        const groups = regions.map(() => new Map());
+        source.split('\n').forEach((line, index) => {
+            const match = line.match(/^(\s*vless:\/\/[^\s/?#@]+@)(\[[\da-f:]+\]|[\w.-]+)(?=:\d+(?:[/?#]|$))/i);
+            let name, address, node;
+            try {
+                if (match) {
+                    name = decodeURIComponent(new URL(line.trim()).hash.slice(1));
+                    address = match[2];
+                    node = { index, start: match[1].length, end: match[0].length };
+                } else if (/^\s*vmess:\/\//i.test(line)) {
+                    const encoded = line.trim().slice(8).replace(/-/g, '+').replace(/_/g, '/');
+                    const bytes = Uint8Array.from(atob(encoded), char => char.charCodeAt(0));
+                    const config = JSON.parse(new TextDecoder().decode(bytes));
+                    if (typeof config.ps !== 'string' || typeof config.add !== 'string' || !config.add) return;
+                    name = config.ps;
+                    address = config.add;
+                    node = { index, config, prefix: line.match(/^\s*/)[0] };
+                } else return;
+            } catch {
+                return;
+            }
+            if (!/argo/i.test(name)) return;
+            const region = regions[5][1].test(name) ? 5 : regions.findIndex(([, pattern]) => pattern.test(name));
+            if (region < 0) return;
+            const group = groups[region];
+            if (!group.has(address)) group.set(address, []);
+            group.get(address).push(node);
+        });
+        groups.forEach((group, region) => {
+            if (!group.size) {
+                const empty = document.createElement('div');
+                empty.textContent = regions[region][0] + ' · 无匹配节点';
+                list.append(empty);
+            }
+            if (group.size) {
+                const nodes = [...group].flatMap(([address, entries]) =>
+                    entries.map(entry => ({ ...entry, address })));
+                const row = document.createElement('div');
+                row.className = 'argo-row';
+                const label = document.createElement('label');
+                const input = document.createElement('input');
+                const button = document.createElement('button');
+                const addresses = [...group.keys()];
+                input.placeholder = addresses[0];
+                input.title = '第一个当前地址：' + addresses[0] + '。输入新 IP 或域名后应用替换。';
+                input.value = pending[region] || '';
+                input.dataset.region = region;
+                label.append(regions[region][0] + ' · ' + nodes.length + ' 条', input);
+                button.className = 'btn btn-save';
+                button.textContent = '应用替换';
+                button.onclick = () => applyRegion(region, input, nodes);
+                row.append(label, button);
+                list.append(row);
+                rows.push({ region, input, nodes });
+            }
+        });
+    }
+
+    document.getElementById('argo-scan').onclick = () => {
+        refresh();
+        status.textContent = '已重新识别';
+    };
+    function applyRegion(region, input, nodes) {
+        applyChanges([{ region, input, nodes }]);
+    }
+    document.getElementById('argo-apply-all').onclick = () => {
+        applyChanges(rows.filter(row => row.input.value.trim()));
+    };
+    function applyChanges(changes) {
+        if (editor.value !== source) {
+            status.textContent = '链接已编辑，请先点击「重新识别」。';
+            return;
+        }
+        if (!changes.length) {
+            status.textContent = '请先输入新 IP 或域名。';
+            return;
+        }
+        for (const { input } of changes) {
+            const ip = input.value.trim();
+            const validIPv4 = /^(0|[1-9]\d{0,2})(\.(0|[1-9]\d{0,2})){3}$/.test(ip) &&
+                ip.split('.').every(part => Number(part) <= 255);
+            const validDomain = ip.length <= 253 && /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(ip);
+            if (!validIPv4 && !validDomain) {
+                status.textContent = ip ? '请输入有效的 IPv4 地址或域名。' : '请先输入新 IP 或域名，再点击应用替换。';
+                return;
+            }
+        }
+        const changedRegions = new Set(changes.map(row => row.region));
+        const pending = {};
+        list.querySelectorAll('input').forEach(field => {
+            if (!changedRegions.has(Number(field.dataset.region))) pending[field.dataset.region] = field.value;
+        });
+        const lines = source.split('\n');
+        let count = 0;
+        for (const { input, nodes } of changes) {
+            const ip = input.value.trim();
+            for (const { index, start, end, address, config, prefix } of nodes) {
+                if (address === ip) continue;
+                if (config) {
+                    const bytes = new TextEncoder().encode(JSON.stringify({ ...config, add: ip }));
+                    let binary = '';
+                    for (const byte of bytes) binary += String.fromCharCode(byte);
+                    lines[index] = prefix + 'vmess://' + btoa(binary);
+                } else {
+                    lines[index] = lines[index].slice(0, start) + ip + lines[index].slice(end);
+                }
+                count++;
+            }
+        }
+        editor.value = lines.join('\n');
+        refresh(pending);
+        status.textContent = count ? '已替换 ' + count + ' 条，请保存配置。' : '没有需要替换的地址。';
+        if (count && window.confirm('已替换 ' + count + ' 条节点，是否保存配置？')) {
+            const saveButton = document.querySelector('.btn-save-config');
+            if (saveButton) saveContent(saveButton);
+        }
+    }
+    refresh();
+}
+
 async function KV(request, env, txt = 'ADD.txt') {
 	const url = new URL(request.url);
 	try {
@@ -559,6 +699,27 @@ async function KV(request, env, txt = 'ADD.txt') {
             max-width: 900px; /* 恢复你原始喜欢的宽度 */
             margin: 0 auto 20px auto;
         }
+        .info-container.with-argo {
+            max-width: 100%;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(420px, 1fr);
+            align-items: stretch;
+            gap: 16px;
+        }
+        #argo-panel { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; align-content: start; }
+        #argo-actions .btn { display: block; width: 100px; height: 34px; padding: 0; margin-bottom: 8px; font-size: 14px; }
+        #argo-groups > * { display: block; margin-bottom: 8px; overflow-wrap: anywhere; }
+        #argo-groups .argo-row { display: flex; align-items: end; gap: 8px; }
+        .argo-row label { flex: 1; min-width: 0; }
+        .argo-row .btn { flex: none; }
+        #argo-groups input { display: block; box-sizing: border-box; width: 100%; margin-top: 4px; }
+        #argo-status { font-size: 13px; }
+        @media (max-width: 760px) {
+            .info-container.with-argo { grid-template-columns: minmax(0, 1fr); }
+        }
+        @media (max-width: 440px) {
+            #argo-panel { grid-template-columns: minmax(0, 1fr); }
+        }
 
         /* 下半部分容器：全宽 */
         .editor-container {
@@ -597,13 +758,14 @@ async function KV(request, env, txt = 'ADD.txt') {
             border-bottom: 1px var(--border-color) dashed;
         }
         .link-item:last-child { border-bottom: none; }
-        .link-label { font-weight: bold; width: 100px; flex-shrink: 0; }
+        .link-label { font-weight: bold; width: 130px; flex-shrink: 0; }
         .link-url { 
             color: blue; 
             text-decoration: underline; 
             word-break: break-all;
             flex-grow: 1;
             cursor: pointer;
+            min-width: 0;
         }
 
         /* 编辑器样式：全宽且默认大高度 */
@@ -670,11 +832,11 @@ async function KV(request, env, txt = 'ADD.txt') {
     <script src="https://cdn.jsdelivr.net/npm/@keeex/qrcodejs-kx@1.0.2/qrcode.min.js"></script>
 </head>
 <body>
-    <div class="info-container">
+    <div class="info-container${hasKV ? ' with-argo' : ''}">
         <div class="card">
             <h2>🔗 订阅链接管理</h2>
-            ${['', '?b64', '?clash', '?sb', '?surge', '?quanx', '?loon'].map((type, index) => {
-                const labels = ['自适应', 'Base64', 'Clash', 'Sing-box', 'Surge', 'Quantumult X', 'Loon'];
+            ${['', '?b64', '?clash', '?sb', '?shadowrocket'].map((type, index) => {
+                const labels = ['自适应', 'Base64', 'Clash', 'Sing-box', 'Shadowrocket'];
                 const fullUrl = `https://${url.hostname}/${mytoken}${type}`;
                 return `
                 <div class="link-item">
@@ -684,6 +846,16 @@ async function KV(request, env, txt = 'ADD.txt') {
                 </div>`;
             }).join('')}
         </div>
+        ${hasKV ? `
+        <div class="card" id="argo-panel">
+            <div id="argo-actions">
+                <h2>🌐 Argo 优选 IP</h2>
+                <button class="btn btn-copy" id="argo-scan">重新识别</button>
+                <button class="btn btn-save" id="argo-apply-all">全部替换</button>
+                <div id="argo-status"></div>
+            </div>
+            <div id="argo-groups"></div>
+        </div>` : ''}
     </div>
 
     <div class="editor-container">
@@ -693,7 +865,7 @@ async function KV(request, env, txt = 'ADD.txt') {
             </div>
             ${hasKV ? `
             <div class="btn-group">
-                <button class="btn btn-save" onclick="saveContent(this)">保存配置</button>
+                <button class="btn btn-save btn-save-config" onclick="saveContent(this)">保存配置</button>
                 <span class="save-status" style="font-size: 13px; color: #666;"></span>
             </div>
             <textarea class="editor" id="content" placeholder="每行输入一个订阅链接">${content}</textarea>
@@ -716,6 +888,7 @@ async function KV(request, env, txt = 'ADD.txt') {
     </div>
 
     <script>
+        (${initArgoPanel.toString()})();
         function copyOnly(text) {
             navigator.clipboard.writeText(text).then(() => {
                 const status = document.getElementById('saveStatus');
