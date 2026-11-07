@@ -888,6 +888,7 @@ async function KV(request, env, txt = 'ADD.txt') {
     </div>
 
     <script>
+        const __name = target => target;
         (${initArgoPanel.toString()})();
         function copyOnly(text) {
             navigator.clipboard.writeText(text).then(() => {
