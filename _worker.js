@@ -25,7 +25,7 @@ let urls = [];
 let subConverter = "SUBAPI.fxxk.dedyn.io"; //在线订阅转换后端，目前使用CM的订阅转换功能。支持自建psub 可自行搭建https://github.com/bulianglin/psub
 let subConfig = "https://raw.githubusercontent.com/chenlee86/CF-Workers-SUB/main/sub-config.ini"; //订阅配置文件
 let subProtocol = 'https';
-let adminPassword = ''; //编辑页登录密码，建议用环境变量 PASSWORD 设置；为空时编辑页锁定
+let adminPasswordHash = '36322a7a1504d7bebbfd1a6bd4faccb81a73c09c6838f18d3ac76749d23c9029'; //编辑页登录密码的 SHA-256；可用环境变量 PASSWORD（明文）覆盖
 
 export default {
 	async fetch(request, env) {
@@ -46,7 +46,7 @@ export default {
 		}
 		subConfig = env.SUBCONFIG || subConfig;
 		FileName = env.SUBNAME || FileName;
-		adminPassword = env.PASSWORD || adminPassword;
+		if (env.PASSWORD) adminPasswordHash = await sha256Hex(env.PASSWORD);
 
 		const currentDate = new Date();
 		currentDate.setHours(0, 0, 0, 0);
@@ -697,12 +697,11 @@ async function KV(request, env, txt = 'ADD.txt') {
 	const url = new URL(request.url);
 	try {
 		// 登录校验
-		const authValue = await sha256Hex(adminPassword + '|' + mytoken);
+		const authValue = await sha256Hex(adminPasswordHash + '|' + mytoken);
 		const cookieName = 'sub_auth';
-		if (!adminPassword) return new Response('编辑页已锁定：请在 Worker 环境变量中设置 PASSWORD 后再访问。', { status: 403, headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
 		if (request.method === "POST" && request.headers.get('X-Admin-Login')) {
 			const password = await request.text();
-			if (password !== adminPassword) {
+			if (await sha256Hex(password) !== adminPasswordHash) {
 				await new Promise(r => setTimeout(r, 1000));
 				return new Response('密码错误', { status: 401 });
 			}
