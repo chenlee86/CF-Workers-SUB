@@ -25,6 +25,7 @@ let urls = [];
 let subConverter = "SUBAPI.fxxk.dedyn.io"; //在线订阅转换后端，目前使用CM的订阅转换功能。支持自建psub 可自行搭建https://github.com/bulianglin/psub
 let subConfig = "https://raw.githubusercontent.com/chenlee86/CF-Workers-SUB/main/sub-config.ini"; //订阅配置文件
 let subProtocol = 'https';
+let adminPassword = ''; //编辑页登录密码，建议用环境变量 PASSWORD 设置；为空时编辑页锁定
 
 export default {
 	async fetch(request, env) {
@@ -45,6 +46,7 @@ export default {
 		}
 		subConfig = env.SUBCONFIG || subConfig;
 		FileName = env.SUBNAME || FileName;
+		adminPassword = env.PASSWORD || adminPassword;
 
 		const currentDate = new Date();
 		currentDate.setHours(0, 0, 0, 0);
@@ -651,9 +653,70 @@ function initArgoPanel() {
     refresh();
 }
 
+async function sha256Hex(text) {
+	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+	return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function loginPage(title) {
+	return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title} 登录</title>
+<style>
+body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f4f6f8; font-family: system-ui, sans-serif; }
+form { background: #fff; padding: 28px 24px; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.08); width: min(320px, calc(100vw - 32px)); box-sizing: border-box; }
+h2 { margin: 0 0 16px; font-size: 18px; }
+input, button { display: block; width: 100%; box-sizing: border-box; height: 40px; font-size: 15px; border-radius: 6px; }
+input { border: 1px solid #ccc; padding: 0 10px; margin-bottom: 12px; }
+button { border: 0; background: #4caf50; color: #fff; cursor: pointer; }
+#msg { color: #d33; font-size: 13px; min-height: 18px; margin-top: 10px; }
+</style></head>
+<body>
+<form id="f">
+<h2>🔒 ${title}</h2>
+<input type="password" id="pw" placeholder="请输入密码" autocomplete="current-password" autofocus required>
+<button type="submit">解锁</button>
+<div id="msg"></div>
+</form>
+<script>
+document.getElementById('f').onsubmit = async e => {
+	e.preventDefault();
+	const msg = document.getElementById('msg');
+	msg.textContent = '';
+	try {
+		const r = await fetch(location.href, { method: 'POST', headers: { 'X-Admin-Login': '1' }, body: document.getElementById('pw').value });
+		if (r.ok) location.reload();
+		else msg.textContent = '密码错误';
+	} catch (err) { msg.textContent = '请求失败: ' + err.message; }
+};
+</script>
+</body></html>`;
+}
+
 async function KV(request, env, txt = 'ADD.txt') {
 	const url = new URL(request.url);
 	try {
+		// 登录校验
+		const authValue = await sha256Hex(adminPassword + '|' + mytoken);
+		const cookieName = 'sub_auth';
+		if (!adminPassword) return new Response('编辑页已锁定：请在 Worker 环境变量中设置 PASSWORD 后再访问。', { status: 403, headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
+		if (request.method === "POST" && request.headers.get('X-Admin-Login')) {
+			const password = await request.text();
+			if (password !== adminPassword) {
+				await new Promise(r => setTimeout(r, 1000));
+				return new Response('密码错误', { status: 401 });
+			}
+			return new Response('ok', {
+				headers: { 'Set-Cookie': `${cookieName}=${authValue}; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Strict` }
+			});
+		}
+		const cookies = request.headers.get('Cookie') || '';
+		const loggedIn = cookies.split(/;\s*/).some(c => c === `${cookieName}=${authValue}`);
+		if (!loggedIn) {
+			if (request.method === "POST") return new Response('未登录，请刷新页面重新登录', { status: 401 });
+			return new Response(loginPage(FileName), { headers: { 'Content-Type': 'text/html;charset=utf-8', 'Cache-Control': 'no-store' } });
+		}
+
 		// POST请求处理
 		if (request.method === "POST") {
 			if (!env.KV) return new Response("未绑定KV空间", { status: 400 });
