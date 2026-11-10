@@ -521,12 +521,13 @@ function initArgoPanel() {
         list.replaceChildren();
         const groups = regions.map(() => new Map());
         source.split('\n').forEach((line, index) => {
-            const match = line.match(/^(\s*vless:\/\/[^\s/?#@]+@)(\[[\da-f:]+\]|[\w.-]+)(?=:\d+(?:[/?#]|$))/i);
-            let name, address, node;
+            const match = line.match(/^(\s*vless:\/\/[^\s/?#@]+@)(\[[\da-f:]+\]|[\w.-]+):(\d+)(?=[/?#]|$)/i);
+            let name, address, port, node;
             try {
                 if (match) {
                     name = decodeURIComponent(new URL(line.trim()).hash.slice(1));
                     address = match[2];
+                    port = match[3];
                     node = { index, start: match[1].length, end: match[0].length };
                 } else if (/^\s*vmess:\/\//i.test(line)) {
                     const encoded = line.trim().slice(8).replace(/-/g, '+').replace(/_/g, '/');
@@ -535,6 +536,7 @@ function initArgoPanel() {
                     if (typeof config.ps !== 'string' || typeof config.add !== 'string' || !config.add) return;
                     name = config.ps;
                     address = config.add;
+                    port = config.port == null ? '' : String(config.port);
                     node = { index, config, prefix: line.match(/^\s*/)[0] };
                 } else return;
             } catch {
@@ -544,8 +546,9 @@ function initArgoPanel() {
             const region = regions[5][1].test(name) ? 5 : regions.findIndex(([, pattern]) => pattern.test(name));
             if (region < 0) return;
             const group = groups[region];
-            if (!group.has(address)) group.set(address, []);
-            group.get(address).push(node);
+            const key = port ? address + ':' + port : address;
+            if (!group.has(key)) group.set(key, []);
+            group.get(key).push({ ...node, address, port });
         });
         groups.forEach((group, region) => {
             if (!group.size) {
@@ -554,8 +557,7 @@ function initArgoPanel() {
                 list.append(empty);
             }
             if (group.size) {
-                const nodes = [...group].flatMap(([address, entries]) =>
-                    entries.map(entry => ({ ...entry, address })));
+                const nodes = [...group.values()].flat();
                 const row = document.createElement('div');
                 row.className = 'argo-row';
                 const label = document.createElement('label');
@@ -563,7 +565,7 @@ function initArgoPanel() {
                 const button = document.createElement('button');
                 const addresses = [...group.keys()];
                 input.placeholder = addresses[0];
-                input.title = '第一个当前地址：' + addresses[0] + '。输入新 IP 或域名后应用替换。';
+                input.title = '第一个当前地址：' + addresses[0] + '。输入新 IP、域名，或 IP/域名:端口 后应用替换（带端口时同时替换端口）。';
                 input.value = pending[region] || '';
                 input.dataset.region = region;
                 label.append(regions[region][0] + ' · ' + nodes.length + ' 条', input);
@@ -596,13 +598,21 @@ function initArgoPanel() {
             status.textContent = '请先输入新 IP 或域名。';
             return;
         }
+        const parse = value => {
+            const [, ip, port] = value.trim().match(/^(.*?)(?::(\d+))?$/);
+            return { ip, port };
+        };
         for (const { input } of changes) {
-            const ip = input.value.trim();
+            const { ip, port } = parse(input.value);
+            if (port !== undefined && !(Number(port) >= 1 && Number(port) <= 65535 && /^[1-9]\d*$/.test(port))) {
+                status.textContent = '端口需为 1-65535 之间的数字。';
+                return;
+            }
             const validIPv4 = /^(0|[1-9]\d{0,2})(\.(0|[1-9]\d{0,2})){3}$/.test(ip) &&
                 ip.split('.').every(part => Number(part) <= 255);
             const validDomain = ip.length <= 253 && /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(ip);
             if (!validIPv4 && !validDomain) {
-                status.textContent = ip ? '请输入有效的 IPv4 地址或域名。' : '请先输入新 IP 或域名，再点击应用替换。';
+                status.textContent = ip ? '请输入有效的 IPv4 地址或域名（可带 :端口）。' : '请先输入新 IP 或域名，再点击应用替换。';
                 return;
             }
         }
@@ -614,16 +624,18 @@ function initArgoPanel() {
         const lines = source.split('\n');
         let count = 0;
         for (const { input, nodes } of changes) {
-            const ip = input.value.trim();
-            for (const { index, start, end, address, config, prefix } of nodes) {
-                if (address === ip) continue;
+            const { ip, port: newPort } = parse(input.value);
+            for (const { index, start, end, address, port, config, prefix } of nodes) {
+                if (address === ip && (!newPort || newPort === port)) continue;
                 if (config) {
-                    const bytes = new TextEncoder().encode(JSON.stringify({ ...config, add: ip }));
+                    const updated = { ...config, add: ip };
+                    if (newPort) updated.port = typeof config.port === 'number' ? Number(newPort) : newPort;
+                    const bytes = new TextEncoder().encode(JSON.stringify(updated));
                     let binary = '';
                     for (const byte of bytes) binary += String.fromCharCode(byte);
                     lines[index] = prefix + 'vmess://' + btoa(binary);
                 } else {
-                    lines[index] = lines[index].slice(0, start) + ip + lines[index].slice(end);
+                    lines[index] = lines[index].slice(0, start) + ip + ':' + (newPort || port) + lines[index].slice(end);
                 }
                 count++;
             }
